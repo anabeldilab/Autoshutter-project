@@ -1,9 +1,5 @@
 #include <WebServer.h>
 
-#include "../include/config.h"
-#include "../include/WebServer.h"
-#include "../include/HtmlUI.h"
-
 WebServer server(80);
 
 void handleRoot() {
@@ -15,7 +11,7 @@ void handle_notfound() {
 }
 
 void handleOn() {
-  htmlButtonState = 1;
+  //htmlButtonState = 1;
   server.send(200, "text/plain", "Modo ON activado");
 }
 

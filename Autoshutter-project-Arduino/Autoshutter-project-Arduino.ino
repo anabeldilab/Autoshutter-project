@@ -1,7 +1,3 @@
-#include "include/HtmlUI.h"
-#include "include/WebServer.h"
-#include "include/wifiConfig.h"
-
 void setup() {
   Serial.begin(115200);
   startWiFi();
