@@ -1,5 +1,3 @@
-#include <WiFi.h>
-
 const char* ssid = "Redmi Note 11S";
 const char* password = "Gpa7cnsi";
 
