@@ -34,6 +34,21 @@ const char* HTML_UI = R"rawliteral(
 </html>
 )rawliteral";
 
+void IRAM_ATTR getEncoderTurn () {
+  if (ENCODER_POS < 0) {
+    ENCODER_POS = 0;
+  }
+  static unsigned long last_interrupt_time = 0;
+  unsigned long interrupt_time = millis();
+  if (interrupt_time - last_interrupt_time > 60) {
+    int pinA = digitalRead(ENCODER_CW_PIN);
+    int pinB = digitalRead(ENCODER_CC_PIN);
+    int result = pinB > pinA ? 1 : -1;
+    ENCODER_POS += result;
+  }
+  last_interrupt_time = interrupt_time;
+}
+
 void setup() {
   Serial.begin(115200);
   pinMode(MOTOR_PIN1, OUTPUT);
@@ -54,6 +69,8 @@ void setup() {
 }
 
 void loop() {
+  Serial.print("POS: ");
+  Serial.println(ENCODER_POS);
   if ((ENCODER_POS >= 200) || (ENCODER_POS <= 0)) {
     motorStop();
   }
@@ -113,22 +130,6 @@ void handleClientRequest() {
     Serial.println("Client disconnected.");
     Serial.println("");
   }
-}
-
-void getEncoderTurn () {
-  static unsigned long last_interrupt_time = 0;
-  unsigned long interrupt_time = millis();
-  if (interrupt_time - last_interrupt_time > 60) {
-    int pinA = digitalRead(ENCODER_CW_PIN);
-    int pinB = digitalRead(ENCODER_CC_PIN);
-    int result = pinB > pinA ? 1 : -1;
-    //if (ENCODER_POS > 0) {
-      ENCODER_POS += 1 * result;
-    //}
-    Serial.print("POS: ");
-    Serial.println(ENCODER_POS);
-  }
-  last_interrupt_time = interrupt_time;
 }
 
 void motorStop() {
