@@ -7,7 +7,7 @@ const int MOTOR_PIN2 = 26;
 const int ENCODER_CW_PIN = 14;
 const int ENCODER_CC_PIN = 27;
 const int ENCODER_SW_PIN = 12;
-int ENCODER_POS = 0;
+int ENCODER_POS = 1;
 
 String header;
 unsigned long currentTime = millis();
@@ -121,9 +121,10 @@ void getEncoderTurn () {
   if (interrupt_time - last_interrupt_time > 60) {
     int pinA = digitalRead(ENCODER_CW_PIN);
     int pinB = digitalRead(ENCODER_CC_PIN);
-    if (ENCODER_POS > 0) {
-      ENCODER_POS = pinB > pinA ? 1 : -1;
-    }
+    int result = pinB > pinA ? 1 : -1;
+    //if (ENCODER_POS > 0) {
+      ENCODER_POS += 1 * result;
+    //}
     Serial.print("POS: ");
     Serial.println(ENCODER_POS);
   }
