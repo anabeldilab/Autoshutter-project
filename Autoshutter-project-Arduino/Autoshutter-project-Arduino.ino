@@ -1,3 +1,7 @@
+#include <WebServer.h>
+
+WebServer server(80);
+
 void setup() {
   Serial.begin(115200);
   startWiFi();
@@ -7,6 +11,7 @@ void setup() {
 }
 
 void loop() {
+  server.handleClient();
   // Aquí podrías incluir lógica adicional si es necesaria
 }
 

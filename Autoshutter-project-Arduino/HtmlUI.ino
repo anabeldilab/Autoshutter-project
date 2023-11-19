@@ -3,6 +3,7 @@ const char* HTML_UI = R"rawliteral(
 <html>
 <head>
   <title>Control de Temperatura</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"> <!-- Etiqueta meta viewport -->
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -25,8 +26,8 @@ const char* HTML_UI = R"rawliteral(
       border-radius: 15px;
       box-shadow: 0 9px #999;
       margin: 10px;
-      width: 80%; /* Ancho ajustable */
-      max-width: 200px; /* Máximo ancho */
+      width: 80%;
+      max-width: 200px;
     }
     .button:hover {background-color: #3e8e41}
     .button:active {
@@ -40,15 +41,22 @@ const char* HTML_UI = R"rawliteral(
     #chartButton:hover {
       background-color: #005f6a;
     }
+    .button:inactive {
+      background-color: red;
+      box-shadow: 0 5px #666;
+      transform: translateY(4px);
+    }
 
     @media screen and (max-width: 600px) {
       .button {
-        width: 90%;
-        padding: 15px 20px;
-        font-size: 18px;
+        width: 100%;
+        padding: 20px 30px;
+        font-size: 20px;
+        margin: 20px 0;
       }
       h1 {
-        font-size: 24px;
+        font-size: 30px;
+        margin-bottom: 20px;
       }
     }
   </style>
@@ -56,16 +64,29 @@ const char* HTML_UI = R"rawliteral(
 <body>
   <h1>Control de Temperatura</h1>
   <button class="button" id="onButton">ON</button>
-  <button class="button" id="offButton">OFF</button>
+  <button class="button disabled" id="offButton">OFF</button>
   <br>
   <button class="button" id="chartButton">Mostrar Gráfica</button>
 
   <script>
-    document.getElementById('onButton').addEventListener('click', function() {
-      fetch('/on') // Hace una petición GET a la ruta /on
+    const onButton = document.getElementById('onButton');
+    const offButton = document.getElementById('offButton');
+
+    onButton.addEventListener('click', function() {
+      fetch('/on')
         .then(response => response.text())
-        .then(data => alert(data)); // Muestra una alerta con la respuesta
-  });
+        .then(data => {
+          alert(data);
+        });
+    });
+
+    offButton.addEventListener('click', function() {
+      fetch('/off')
+        .then(response => response.text())
+        .then(data => {
+          alert(data);
+        });
+    });
   </script>
 </body>
 </html>
