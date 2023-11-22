@@ -1,20 +1,24 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
+#include <esp_task_wdt.h>
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-RTC_DATA_ATTR int cont = 0;
-#define TOUCH_THRESHOLD 40
+RTC_DATA_ATTR bool powerSaveMode = false;
+const int TOUCH_THRESHOLD = 40;
+const int WDT_TIMEOUT = 5;
 
 // MQTT Broker
 const char *mqtt_broker = "node02.myqtthub.com";
-const char *topic = "esp32/autoshutter";
+const char *autoshutterTopic = "esp32/autoshutter";
+const char *sleepTopic = "esp32/sleep";
 const char *mqtt_username = "alu0101206011";
 const char *mqtt_password = "";
 const int mqtt_port = 1883;
 
-static unsigned long lastMsg = 0;
+unsigned long lastSleep = 0;
+unsigned long lastMsg = 0;
 
 const int MOTOR_PIN1 = 25;
 const int MOTOR_PIN2 = 26;
@@ -52,34 +56,25 @@ void setup() {
   pinMode(ENCODER_CC_PIN, INPUT);
   pinMode(ENCODER_SW_PIN, INPUT);
 
+  //esp_task_wdt_init(WDT_TIMEOUT, true); TODO: Fix this
+  //esp_task_wdt_add(NULL);
+  //Serial.println("Iniciando Watchdog");
+
   startWiFi();
+  //esp_task_wdt_deinit();
 
   client.setServer(mqtt_broker, mqtt_port);
   client.setCallback(callback);
-  while (!client.connected()) {
-      String client_id = "alu0101206011-esp32";
-      Serial.printf("The client %s connects to the public MQTT broker\n", client_id.c_str());
-      if (client.connect(client_id.c_str(), mqtt_username, mqtt_password)) {
-          Serial.println("Public emqx MQTT connected");
-      } else {
-          Serial.print("failed with state ");
-          Serial.print(client.state());
-          delay(2000);
-      }
-  }
 
-  // publish and subscribe
-  // client.publish(topic, "Hi, I'm ESP32 ^^");
-  //client.subscribe(topic);
+  connect();
+
 
   motorStop();
 
-  /*touchAttachInterrupt(T2, awake, TOUCH_THRESHOLD);
+  touchAttachInterrupt(T2, awake, TOUCH_THRESHOLD);
   esp_sleep_enable_touchpad_wakeup();
-
-  Serial.println("Sleeping...");
-  delay(1000);
-  esp_deep_sleep_start(); */
+  // despertar cada 10 segundos
+  esp_sleep_enable_timer_wakeup(10000000);
 
   attachInterrupt(digitalPinToInterrupt(ENCODER_CW_PIN), getEncoderTurn, FALLING);
 }
@@ -97,26 +92,37 @@ void callback(char* topic, byte* message, unsigned int length) {
   }
   Serial.println();
 
-  if (messageTemp == "DOWN") {
-    Serial.println("LowerBlinds");
-    if (ENCODER_POS <= 200) {
-      digitalWrite(MOTOR_PIN1, HIGH);
-      digitalWrite(MOTOR_PIN2, LOW);
+  if (String(topic) == "esp32/autoshutter") {
+    if (messageTemp == "DOWN") {
+      Serial.println("LowerBlinds");
+      if (ENCODER_POS <= 200) {
+        digitalWrite(MOTOR_PIN1, HIGH);
+        digitalWrite(MOTOR_PIN2, LOW);
+      }
+    } else if (messageTemp == "UP") {
+      Serial.println("raiseBlinds");
+      if (ENCODER_POS > 0) {
+        digitalWrite(MOTOR_PIN1, LOW);
+        digitalWrite(MOTOR_PIN2, HIGH);
+      }
+    } else if (messageTemp == "STOP") {
+      Serial.println("stopBlinds");
+      motorStop();
     }
-  } else if (messageTemp == "UP") {
-    Serial.println("raiseBlinds");
-    if (ENCODER_POS > 0) {
-      digitalWrite(MOTOR_PIN1, LOW);
-      digitalWrite(MOTOR_PIN2, HIGH);
+  } else if (String(topic) == "esp32/sleep") {
+    if (messageTemp == "ON") {
+      Serial.println("PowerSaveMode ON");
+      powerSaveMode = true;
+    } else if (messageTemp == "OFF") {
+      Serial.println("PowerSaveMode OFF");
+      powerSaveMode = false;
     }
-  } else if (messageTemp == "STOP") {
-    Serial.println("stopBlinds");
-    motorStop();
   }
+
 }
 
 
-void reconnect() {
+void connect() {
   String client_id = "alu0101206011-esp32";
   // Loop until we're reconnected
   while (!client.connected()) {
@@ -125,9 +131,10 @@ void reconnect() {
     if (client.connect(client_id.c_str(), mqtt_username, mqtt_password)) {
       Serial.println("connected");
       // Subscribe
-      client.subscribe(topic);
+      client.subscribe(autoshutterTopic);
+      client.subscribe(sleepTopic);
     } else {
-      Serial.print("failed, rc=");
+      Serial.print("failed, reconnect ");
       Serial.print(client.state());
       Serial.println(" try again in 5 seconds");
       // Wait 5 seconds before retrying
@@ -139,9 +146,15 @@ void reconnect() {
 void loop() {
   unsigned long now = millis();
   
-  if (!client.connected()) {
-    reconnect();
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Wifi: lost connection");
+    startWiFi();
   }
+  if (!client.connected()) {
+    Serial.println("MQTT: lost connection");
+    connect();
+  }
+
   client.loop();
 
   if ((ENCODER_POS >= 200) || (ENCODER_POS <= 0)) {
@@ -152,7 +165,15 @@ void loop() {
     lastMsg = now;
     Serial.print("Encoder position: ");
     Serial.println(ENCODER_POS);
-    client.publish("esp32/encoder", String(ENCODER_POS).c_str());
+    //client.publish("esp32/encoder", String(ENCODER_POS).c_str());
+  }
+
+  if (powerSaveMode && now - lastSleep > 5000) { // Time to receive MQTT callback
+    Serial.print(now);
+    Serial.println(now);
+    lastSleep = now;
+    Serial.println("Sleeping...");
+    esp_deep_sleep_start(); 
   }
 }
                
