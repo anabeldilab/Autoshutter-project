@@ -14,18 +14,21 @@ const char *mqtt_username = "alu0101206011";
 const char *mqtt_password = "";
 const int mqtt_port = 1883;
 
+// Timers 
 unsigned long lastSleep = 0;
 unsigned long lastMsg = 0;
 
 const int MOTOR_PIN1 = 25;
 const int MOTOR_PIN2 = 26;
-const int ENCODER_CW_PIN = 14;
-const int ENCODER_CC_PIN = 27;
+const int ENCODER_CW_PIN = 14; // Clockwise pin
+const int ENCODER_CC_PIN = 27; // Counter clockwise pin
 const int ENCODER_SW_PIN = 12;
 int ENCODER_POS = 1;
 
+// Light control
 const int LDR_PIN = 34;
 const int MAX_LIGHT_LEVEL = 4100;
+
 
 void IRAM_ATTR getEncoderTurn () {
   if (ENCODER_POS < 0) {
@@ -42,12 +45,6 @@ void IRAM_ATTR getEncoderTurn () {
   last_interrupt_time = interrupt_time;
 }
 
-
-void awake() {
-  Serial.println("I'm awake");
-}
-
-
 void setup() {
   Serial.begin(115200);
   pinMode(MOTOR_PIN1, OUTPUT);
@@ -56,10 +53,7 @@ void setup() {
   pinMode(ENCODER_CC_PIN, INPUT);
   pinMode(ENCODER_SW_PIN, INPUT);
 
-
-
   startWiFi();
-  //esp_task_wdt_deinit();
 
   client.setServer(mqtt_broker, mqtt_port);
   client.setCallback(callback);
@@ -79,8 +73,8 @@ void callback(char* topic, byte* message, unsigned int length) {
   Serial.print("Message arrived on topic: ");
   Serial.print(topic);
   Serial.print(". Message: ");
+
   String messageTemp;
-  
   for (int i = 0; i < length; i++) {
     Serial.print((char)message[i]);
     messageTemp += (char)message[i];
@@ -138,6 +132,7 @@ void connect() {
   }
 }
 
+
 void loop() {
   unsigned long now = millis();
   
@@ -152,10 +147,13 @@ void loop() {
 
   client.loop();
 
+  // ENCODER POS == 0 shutter is at the top
+  // ENCODER POS == 200 shutter is at the bottom
   if ((ENCODER_POS >= 200) || (ENCODER_POS <= 0)) {
     motorStop();
   }
 
+  // Sends light sensor percentage every 5 seconds
   if (now - lastMsg > 5000) {
     lastMsg = now;
     float LDR_input = analogRead(LDR_PIN);
@@ -171,7 +169,8 @@ void loop() {
     esp_deep_sleep_start(); 
   }
 }
-               
+
+
 void motorStop() {
   digitalWrite(MOTOR_PIN1, LOW);
   digitalWrite(MOTOR_PIN2, LOW);
