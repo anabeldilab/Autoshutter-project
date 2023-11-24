@@ -1,5 +1,5 @@
-const char* ssid = "Redmi Note 11S";
-const char* password = "Gpa7cnsi";
+const char* ssid = "Redmi Note 12 Pro 5G";
+const char* password = "sonawifi";
 
 void startWiFi() {
   // Conexión WiFi

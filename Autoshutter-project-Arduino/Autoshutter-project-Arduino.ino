@@ -1,13 +1,10 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
-#include <esp_task_wdt.h>
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 
 RTC_DATA_ATTR bool powerSaveMode = false;
-const int TOUCH_THRESHOLD = 40;
-const int WDT_TIMEOUT = 5;
 
 // MQTT Broker
 const char *mqtt_broker = "node02.myqtthub.com";
@@ -26,6 +23,9 @@ const int ENCODER_CW_PIN = 14;
 const int ENCODER_CC_PIN = 27;
 const int ENCODER_SW_PIN = 12;
 int ENCODER_POS = 1;
+
+const int LDR_PIN = 34;
+const int MAX_LIGHT_LEVEL = 4100;
 
 void IRAM_ATTR getEncoderTurn () {
   if (ENCODER_POS < 0) {
@@ -56,9 +56,7 @@ void setup() {
   pinMode(ENCODER_CC_PIN, INPUT);
   pinMode(ENCODER_SW_PIN, INPUT);
 
-  //esp_task_wdt_init(WDT_TIMEOUT, true); TODO: Fix this
-  //esp_task_wdt_add(NULL);
-  //Serial.println("Iniciando Watchdog");
+
 
   startWiFi();
   //esp_task_wdt_deinit();
@@ -68,11 +66,8 @@ void setup() {
 
   connect();
 
-
   motorStop();
 
-  touchAttachInterrupt(T2, awake, TOUCH_THRESHOLD);
-  esp_sleep_enable_touchpad_wakeup();
   // despertar cada 10 segundos
   esp_sleep_enable_timer_wakeup(10000000);
 
@@ -163,14 +158,14 @@ void loop() {
 
   if (now - lastMsg > 5000) {
     lastMsg = now;
-    Serial.print("Encoder position: ");
-    Serial.println(ENCODER_POS);
-    //client.publish("esp32/encoder", String(ENCODER_POS).c_str());
+    float LDR_input = analogRead(LDR_PIN);
+    Serial.print("Light level: ");
+    Serial.print((LDR_input / MAX_LIGHT_LEVEL) * 100);
+    Serial.println("%");
+    client.publish("esp32/light", String((LDR_input / MAX_LIGHT_LEVEL) * 100).c_str());
   }
 
   if (powerSaveMode && now - lastSleep > 5000) { // Time to receive MQTT callback
-    Serial.print(now);
-    Serial.println(now);
     lastSleep = now;
     Serial.println("Sleeping...");
     esp_deep_sleep_start(); 
