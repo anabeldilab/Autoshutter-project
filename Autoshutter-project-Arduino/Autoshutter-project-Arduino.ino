@@ -1,6 +1,7 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include <AccelStepper.h>
+#include <EEPROM.h>
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -8,15 +9,14 @@ PubSubClient client(espClient);
 RTC_DATA_ATTR bool powerSaveMode = false;
 
 // MQTT Broker
-const char *mqtt_broker = "192.168.1.48";
+const char *mqtt_broker = "192.168.1.91";
 const char *autoshutterTopic = "esp32/autoshutter";
 const char *sleepTopic = "esp32/sleep";
 const char *mqtt_username = "alu0101206011";
 const char *mqtt_password = "";
 const int mqtt_port = 1883;
 
-// Timers 
-unsigned long lastSleep = 0;
+// Timer
 unsigned long lastMsg = 0;
 
 const int MOTOR_PIN1 = 26;
@@ -24,14 +24,13 @@ const int MOTOR_PIN2 = 25;
 const int MOTOR_PIN3 = 33;
 const int MOTOR_PIN4 = 32;
 
-const int ENCODER_CW_PIN = 14; // Clockwise pin
-const int ENCODER_CC_PIN = 27; // Counter clockwise pin
-const int ENCODER_SW_PIN = 12;
-int ENCODER_POS = 1;
-
 // Light control
 const int LDR_PIN = 34;
 const int MAX_LIGHT_LEVEL = 4100;
+const int LIGHT_THRESHOLD = 2050;
+
+RTC_DATA_ATTR bool isShutterUp = false;
+void updateShutterState(bool newState);
 
 #define MotorInterfaceType 8
 AccelStepper stepper(MotorInterfaceType, MOTOR_PIN1, MOTOR_PIN3, MOTOR_PIN2, MOTOR_PIN4);
@@ -51,13 +50,14 @@ void disableMotor() {
 
 void setup() {
   Serial.begin(115200);
+
+  EEPROM.begin(sizeof(isShutterUp)); // Inicializa la EEPROM con el tamaño necesario
+  EEPROM.get(0, isShutterUp); // Lee el estado guardado desde la dirección 0
+
   pinMode(MOTOR_PIN1, OUTPUT);
   pinMode(MOTOR_PIN2, OUTPUT);
   pinMode(MOTOR_PIN3, OUTPUT);
   pinMode(MOTOR_PIN4, OUTPUT);
-  pinMode(ENCODER_CW_PIN, INPUT);
-  pinMode(ENCODER_CC_PIN, INPUT);
-  pinMode(ENCODER_SW_PIN, INPUT);
   
   startWiFi();
 
@@ -75,6 +75,13 @@ void setup() {
 }
 
 
+void updateShutterState(bool newState) {
+  isShutterUp = newState;
+  EEPROM.put(0, isShutterUp); // Guarda el estado en la dirección 0
+  EEPROM.commit(); // Asegúrate de que los cambios se guarden en la EEPROM
+}
+
+
 void callback(char* topic, byte* message, unsigned int length) {
   Serial.print("Message arrived on topic: ");
   Serial.print(topic);
@@ -88,10 +95,12 @@ void callback(char* topic, byte* message, unsigned int length) {
   Serial.println();
 
   if (String(topic) == "esp32/autoshutter") {
-    if (messageTemp == "DOWN") {
+    if (messageTemp == "DOWN" && isShutterUp) {
       stepper.move(-4096);
-    } else if (messageTemp == "UP") {
+      updateShutterState(false);
+    } else if (messageTemp == "UP" && !isShutterUp) {
       stepper.move(4096);
+      updateShutterState(true);
     } else if (messageTemp == "STOP") {
       stopMotor();
     }
@@ -147,6 +156,8 @@ void loop() {
   // Run the stepper
   if (stepper.distanceToGo() != 0) {
     stepper.run();
+  } else {
+    disableMotor();
   }
 
   // Sends light sensor percentage every 5 seconds
@@ -158,13 +169,20 @@ void loop() {
     Serial.print(LDR_percentage);
     Serial.println("%");
     client.publish("esp32/light", String((LDR_input / MAX_LIGHT_LEVEL) * 100).c_str());
-  }
-
-  if (powerSaveMode && now - lastSleep > 5000) { // Time to receive MQTT callback
-    lastSleep = now;
-    Serial.println("Sleeping...");
-    esp_deep_sleep_start(); 
+    if (powerSaveMode) {
+      if (LDR_input > LIGHT_THRESHOLD && !isShutterUp) {
+        Serial.println("Light is enough, opening the shutter");
+        stepper.move(4096);
+        updateShutterState(true);
+      } else if (LDR_input <= LIGHT_THRESHOLD && isShutterUp) {
+        Serial.println("Light is not enough, closing the shutter");
+        stepper.move(-4096);
+        updateShutterState(false);
+      }
+      if (stepper.distanceToGo() == 0) {
+        Serial.println("Sleeping...");
+        esp_deep_sleep_start();
+      }
+    }
   }
 }
-
-
